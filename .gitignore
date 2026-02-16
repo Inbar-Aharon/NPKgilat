@@ -1,0 +1,19 @@
+
+# Python
+__pycache__/
+*.pyc
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Google Drive API Secrets
+token.json
+credentials.json
+client_secret.json
+
+# Local Data (Should be synced via script)
+data/
+*.csv
+
+# OS
+.DS_Store
