@@ -164,7 +164,9 @@ def sync_icons_api(service):
              download_file(service, f['id'], f['name'], dest_folder=LOCAL_ASSETS_DIR, file_meta=f)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            executor.map(download_icon_wrapper, final_icons)
+            # Must iterate to catch exceptions!
+            results = executor.map(download_icon_wrapper, final_icons)
+            for _ in results: pass
 
     except Exception as e:
         print(f"Icon API Sync Failed: {e}")
@@ -236,7 +238,9 @@ def sync_data_api(creds=None):
              download_file(service, f['id'], f['name'], file_meta=f) # dest defaults to LOCAL_DATA_DIR
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            executor.map(download_item, final_files_list)
+            # Must iterate to catch exceptions!
+            results = executor.map(download_item, final_files_list)
+            for _ in results: pass
         
         sync_icons_api(service)
         
@@ -246,6 +250,25 @@ def sync_data_api(creds=None):
     except Exception as e:
         print(f"API Sync Failed: {e}")
         return False
+
+def download_file(service, file_id, file_name, dest_folder=LOCAL_DATA_DIR, file_meta=None):
+    """Downloads a file from Drive."""
+    try:
+        request = service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+        
+        # Save to disk
+        filepath = os.path.join(dest_folder, file_name)
+        with open(filepath, "wb") as f:
+            f.write(fh.getbuffer())
+        print(f"Downloaded: {file_name}")
+    except Exception as e:
+        print(f"Failed to download {file_name}: {e}")
+        raise e
 
 if __name__ == "__main__":
     sync_data()
