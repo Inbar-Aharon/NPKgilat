@@ -498,16 +498,18 @@ def main():
     # Check if data folder is empty or missing CSVs
     data_files = glob.glob(os.path.join(os.path.dirname(__file__), 'data', '*.csv'))
     if not data_files and creds:
-        with st.spinner("First run detected: Syncing data from Google Drive... This may take a minute."):
+        with st.empty(): 
+             st.info("First run detected: Syncing data from Google Drive... This may take a minute.")
              success = sync_data.sync_data(creds)
              
              # Double check if files actually arrived
              data_files_new = glob.glob(os.path.join(os.path.dirname(__file__), 'data', '*.csv'))
              
              if success and data_files_new:
-                 st.success("Initial data sync complete!")
-                 st.cache_data.clear() # Clear cache to force reload
-                 st.rerun()
+                 st.success("Initial data sync complete! Please click 'Rerun' below to load the dashboard.")
+                 st.cache_data.clear()
+                 if st.button("Load Dashboard"):
+                     st.rerun()
              elif success and not data_files_new:
                  st.error("Sync reported success, but no CSV files were found in Drive. Please check your Google Drive folder 'data app NPK'.")
              else:
