@@ -484,36 +484,39 @@ def main():
             except Exception as e:
                 st.error(f"Authentication failed: {e}")
 
-    # Sync icons on startup if we have creds
-    # Sync icons on startup if we have creds
-    if creds and 'icons_synced' not in st.session_state:
-        with st.spinner("Syncing assets from Drive... (Optimized)"):
-            try:
-                sync_data.sync_icons_only(creds)
-                st.session_state['icons_synced'] = True
-            except Exception as e:
-                print(f"Icon sync warning: {e}")
 
-    # --- AUTO-SYNC DATA IF MISSING (For Cloud Deployment) ---
+    # Commented out to prevent startup timeout
+    # if 'icons_synced' not in st.session_state:
+    #     try:
+    #         sync_data.sync_icons_only(creds)
+    #         st.session_state['icons_synced'] = True
+    #     except Exception:
+    #         pass
+
+    # --- MANUAL SYNC TRIGGER (For Cloud Deployment) ---
     # Check if data folder is empty or missing CSVs
     data_files = glob.glob(os.path.join(os.path.dirname(__file__), 'data', '*.csv'))
-    if not data_files and creds:
-        with st.empty(): 
-             st.info("First run detected: Syncing data from Google Drive... This may take a minute.")
-             success = sync_data.sync_data(creds)
-             
-             # Double check if files actually arrived
-             data_files_new = glob.glob(os.path.join(os.path.dirname(__file__), 'data', '*.csv'))
-             
-             if success and data_files_new:
-                 st.success("Initial data sync complete! Please click 'Rerun' below to load the dashboard.")
-                 st.cache_data.clear()
-                 if st.button("Load Dashboard"):
-                     st.rerun()
-             elif success and not data_files_new:
-                 st.error("Sync reported success, but no CSV files were found in Drive. Please check your Google Drive folder 'data app NPK'.")
+    
+    if not data_files:
+        st.warning("⚠️ Data not found locally.")
+        st.info("Since this is a cloud deployment, we need to fetch data from Google Drive.")
+        
+        if st.button("Download Data from Drive & Start App"):
+             if creds:
+                 with st.spinner("Downloading data... this may take 1-2 minutes..."):
+                     success = sync_data.sync_data(creds)
+                     if success:
+                         st.success("Download complete!")
+                         st.session_state['icons_synced'] = True # Assume icons also came
+                         st.cache_data.clear()
+                         st.rerun()
+                     else:
+                         st.error("Download failed. Please check logs.")
              else:
-                 st.error("Failed to sync data. Please check logs.")
+                 st.error("Authentication credentials not found.")
+        
+        # STOP execution here so the app renders the button and doesn't crash trying to load missing data
+        st.stop()
 
     if not creds:
         st.warning("Authentication failed or cancelled. Please check console logs or run `python3 setup_auth.py` manually.")
