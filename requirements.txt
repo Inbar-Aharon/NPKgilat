@@ -1,4 +1,4 @@
-streamlink
+streamlit
 pandas
 plotly
 google-api-python-client
