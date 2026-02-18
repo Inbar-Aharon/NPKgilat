@@ -15,15 +15,25 @@ def get_creds():
     creds = None
     
     # 1. Check st.secrets (for Cloud Deployment)
+    # 1. Check st.secrets (for Cloud Deployment)
     try:
         if hasattr(st, "secrets") and "google_auth" in st.secrets:
             # Convert to dict to ensure compatibility
-            token_info = dict(st.secrets["google_auth"])
+            # st.secrets might behave like a dict or AttrDict
+            secrets_data = st.secrets["google_auth"]
+            # Ensure it is a dictionary
+            if hasattr(secrets_data, "to_dict"):
+                 token_info = secrets_data.to_dict()
+            else:
+                 token_info = dict(secrets_data)
+
             creds = Credentials.from_authorized_user_info(info=token_info, scopes=SCOPES)
             # Do NOT return immediately; we need to check expiry/refresh below
     except Exception as e:
         # Show the error so we can debug it in Cloud logs
-        st.error(f"Error loading secrets: {e}")
+        # Use st.warning instead of st.error to avoid stopping execution if fallback exists
+        print(f"DEBUG: Error loading secrets: {e}")
+        st.warning(f"Secrets Error: {e}")
         pass
 
     # 2. Check local file (token.json) - Only if creds not found yet
