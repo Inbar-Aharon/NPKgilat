@@ -17,17 +17,16 @@ def get_creds():
     # 1. Check st.secrets (for Cloud Deployment)
     try:
         if hasattr(st, "secrets") and "google_auth" in st.secrets:
-            # Assuming st.secrets["google_auth"] contains the token json directly
-            # or we reconstruct it.
-            # Simple way: Streamlit Cloud usually suggests putting the token json content in secrets.
-            token_info = st.secrets["google_auth"]
+            # Convert to dict to ensure compatibility
+            token_info = dict(st.secrets["google_auth"])
             creds = Credentials.from_authorized_user_info(info=token_info, scopes=SCOPES)
-            return creds # If creds are found in secrets, return them immediately
-    except Exception:
-        # Secrets not found or invalid - safely ignore and try local file
+            # Do NOT return immediately; we need to check expiry/refresh below
+    except Exception as e:
+        # Show the error so we can debug it in Cloud logs
+        st.error(f"Error loading secrets: {e}")
         pass
 
-    # 2. Check local file (token.json)
+    # 2. Check local file (token.json) - Only if creds not found yet
     if not creds and os.path.exists(TOKEN_FILE):
         try:
             creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
@@ -43,7 +42,11 @@ def get_creds():
                 with open(TOKEN_FILE, 'w') as token:
                     token.write(creds.to_json())
         except Exception as e:
-            print(f"Error refreshing creds: {e}")
-            creds = None
+            st.warning(f"Error refreshing creds: {e}")
+            # If refresh fails, we might still try to return creds or set to None?
+            # Usually if refresh fails, the token is useless.
+            # But let's return it and let the API call fail if it must, or maybe set to None.
+            # For now, let's keep it, but warn.
+            pass
     
     return creds
