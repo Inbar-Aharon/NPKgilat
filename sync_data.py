@@ -250,6 +250,11 @@ def sync_data_api(creds=None):
         except Exception as e:
              print(f"Icon sync minor error: {e}")
         
+        # Check if users.csv was found
+        downloaded_names = [f['name'] for f in final_files_list]
+        if 'users.csv' not in downloaded_names:
+            return True, f"Sync complete, BUT 'users.csv' was missing! Found: {downloaded_names}"
+            
         print("API Sync Completed Successfully.")
         return True, "Sync completed successfully."
 
