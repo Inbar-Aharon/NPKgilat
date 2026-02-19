@@ -245,15 +245,15 @@ def sync_data_api(creds=None):
         if not final_files_list:
              return False, "Found folder but no CSV files inside."
 
-        def download_item(f):
-             # Use 'save_as' if present, else original name
+        # Sequential download to avoid SSL errors
+        failures = []
+        for f in final_files_list:
              target_name = f.get('save_as', f['name'])
-             download_file(service, f['id'], target_name, file_meta=f) # dest defaults to LOCAL_DATA_DIR
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            # Must iterate to catch exceptions!
-            results = executor.map(download_item, final_files_list)
-            for _ in results: pass
+             try:
+                 download_file(service, f['id'], target_name, file_meta=f)
+             except Exception as e:
+                 print(f"Failed to download {target_name}: {e}")
+                 failures.append(f"{target_name} ({e})")
         
         try:
              sync_icons_api(service)
@@ -262,6 +262,10 @@ def sync_data_api(creds=None):
         
         # Check if users.csv was found
         downloaded_names = [f.get('save_as', f['name']) for f in final_files_list]
+        
+        if failures:
+             return True, f"Sync partial. Failed: {failures}. Users found: {'users.csv' in downloaded_names}"
+
         if 'users.csv' not in downloaded_names:
             return True, f"Sync complete, BUT 'users.csv' was missing! Found: {downloaded_names}"
             
@@ -275,31 +279,38 @@ def sync_data_api(creds=None):
 def download_file(service, file_id, file_name, dest_folder=LOCAL_DATA_DIR, file_meta=None):
     """Downloads a file from Drive."""
     """Downloads a file from Drive."""
-    try:
-        if file_meta and file_meta.get('mimeType') == 'application/vnd.google-apps.spreadsheet':
-             # Export Google Sheet as CSV
-             request = service.files().export_media(fileId=file_id, mimeType='text/csv')
-             # Force .csv extension if missing
-             if not file_name.lower().endswith('.csv'):
-                 file_name += '.csv'
-        else:
-             # Standard download
-             request = service.files().get_media(fileId=file_id)
-             
-        fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while done is False:
-            status, done = downloader.next_chunk()
-        
-        # Save to disk
-        filepath = os.path.join(dest_folder, file_name)
-        with open(filepath, "wb") as f:
-            f.write(fh.getbuffer())
-        print(f"Downloaded: {file_name}")
-    except Exception as e:
-        print(f"Failed to download {file_name}: {e}")
-        raise e
+    """Downloads a file from Drive."""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            if file_meta and file_meta.get('mimeType') == 'application/vnd.google-apps.spreadsheet':
+                 # Export Google Sheet as CSV
+                 request = service.files().export_media(fileId=file_id, mimeType='text/csv')
+                 # Force .csv extension if missing
+                 if not file_name.lower().endswith('.csv'):
+                     file_name += '.csv'
+            else:
+                 # Standard download
+                 request = service.files().get_media(fileId=file_id)
+                 
+            fh = io.BytesIO()
+            downloader = MediaIoBaseDownload(fh, request)
+            done = False
+            while done is False:
+                status, done = downloader.next_chunk()
+            
+            # Save to disk
+            filepath = os.path.join(dest_folder, file_name)
+            with open(filepath, "wb") as f:
+                f.write(fh.getbuffer())
+            print(f"Downloaded: {file_name}")
+            return # Success
+        except Exception as e:
+            print(f"Failed to download {file_name} (Attempt {attempt+1}/{max_retries}): {e}")
+            if attempt == max_retries - 1:
+                raise e
+            import time
+            time.sleep(1) # Wait before retry
 
 if __name__ == "__main__":
     sync_data()
