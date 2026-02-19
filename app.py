@@ -146,6 +146,11 @@ def load_data():
             users_df = pd.read_csv(users_path)
         except Exception as e:
             st.error(f"Error loading users: {e}")
+    else:
+        # DEBUG: List files to see what WAS downloaded
+        files_in_data = os.listdir(DATA_DIR)
+        st.error(f"Could not load user database. 'users.csv' not found in {DATA_DIR}.")
+        st.write(f"Files found in data folder: {files_in_data}")
 
     # Load Data
     all_files = glob.glob(os.path.join(DATA_DIR, "*.csv"))
