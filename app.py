@@ -504,14 +504,25 @@ def main():
         if st.button("Download Data from Drive & Start App"):
              if creds:
                  with st.spinner("Downloading data... this may take 1-2 minutes..."):
-                     success = sync_data.sync_data(creds)
-                     if success:
-                         st.success("Download complete!")
-                         st.session_state['icons_synced'] = True # Assume icons also came
-                         st.cache_data.clear()
-                         st.rerun()
-                     else:
-                         st.error("Download failed. Please check logs.")
+                     try:
+                         # Now expecting a tuple (success, message)
+                         result = sync_data.sync_data(creds)
+                         if isinstance(result, tuple):
+                             success, msg = result
+                         else:
+                             # Fallback if old version of sync_data is loaded (unlikely but safe)
+                             success, msg = result, "Unknown error"
+                         
+                         if success:
+                             st.success(f"{msg}")
+                             st.session_state['icons_synced'] = True # Assume icons also came
+                             st.cache_data.clear()
+                             st.rerun()
+                         else:
+                             st.error(f"Download failed: {msg}")
+                     except Exception as e:
+                         st.error(f"Critical Error: {e}")
+
              else:
                  st.error("Authentication credentials not found.")
         
