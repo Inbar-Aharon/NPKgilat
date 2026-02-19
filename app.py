@@ -1,23 +1,35 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
-import io
-import auth_utils
-import setup_auth
-import os
-import glob
-import sync_data
+import streamlit as st
+
+# --- CONFIGURATION (Must be first) ---
+st.set_page_config(page_title="Grower Nutrition Monitor", layout="wide", page_icon="🌿")
+
+# --- IMPORTS WITH ERROR HANDLING ---
+try:
+    import pandas as pd
+    import numpy as np
+    import plotly.express as px
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaIoBaseDownload
+    import io
+    import auth_utils
+    import setup_auth
+    import os
+    import glob
+    import sync_data
+    import traceback
+except Exception as e:
+    st.error(f"🚨 Critical Import Error: {e}")
+    # We might need traceback here too if it exists in base python
+    import traceback
+    st.code(traceback.format_exc())
+    st.stop()
 
 # --- ASSETS PATH ---
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
 if not os.path.exists(ASSETS_DIR):
     os.makedirs(ASSETS_DIR)
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Grower Nutrition Monitor", layout="wide", page_icon="🌿")
 DRIVE_FOLDER_NAME = "data app NPK"
 
 # --- TRANSLATIONS (Ported from R) ---
