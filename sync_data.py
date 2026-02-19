@@ -264,8 +264,18 @@ def sync_data_api(creds=None):
 
 def download_file(service, file_id, file_name, dest_folder=LOCAL_DATA_DIR, file_meta=None):
     """Downloads a file from Drive."""
+    """Downloads a file from Drive."""
     try:
-        request = service.files().get_media(fileId=file_id)
+        if file_meta and file_meta.get('mimeType') == 'application/vnd.google-apps.spreadsheet':
+             # Export Google Sheet as CSV
+             request = service.files().export_media(fileId=file_id, mimeType='text/csv')
+             # Force .csv extension if missing
+             if not file_name.lower().endswith('.csv'):
+                 file_name += '.csv'
+        else:
+             # Standard download
+             request = service.files().get_media(fileId=file_id)
+             
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
         done = False

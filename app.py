@@ -500,9 +500,12 @@ def main():
 
     # --- MANUAL SYNC TRIGGER (For Cloud Deployment) ---
     # Check if data folder is empty or missing CSVs
-    data_files = glob.glob(os.path.join(os.path.dirname(__file__), 'data', '*.csv'))
+    # --- MANUAL SYNC TRIGGER (For Cloud Deployment) ---
+    # Check if data folder is valid (must have users.csv)
+    users_csv_path = os.path.join(os.path.dirname(__file__), 'data', 'users.csv')
     
-    if not data_files:
+    if not os.path.exists(users_csv_path):
+
         st.warning("⚠️ Data not found locally.")
         st.info("Since this is a cloud deployment, we need to fetch data from Google Drive.")
         
