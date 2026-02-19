@@ -1,5 +1,6 @@
 streamlit
-pandas
+pandas<3
+numpy<2
 plotly
 google-api-python-client
 google-auth-httplib2

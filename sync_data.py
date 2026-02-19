@@ -180,7 +180,7 @@ def sync_data_api(creds=None):
         creds = auth_utils.get_creds()
         if not creds:
             print("No credentials found. Please log in.")
-            return False
+            return False, "No credentials found. Please check secrets."
 
     try:
         service = build('drive', 'v3', credentials=creds)
@@ -194,7 +194,7 @@ def sync_data_api(creds=None):
         
         if not items:
             print(f"Folder '{DRIVE_FOLDER_NAME}' not found.")
-            return False
+            return False, f"Folder '{DRIVE_FOLDER_NAME}' not found in Drive. Please verify the folder name."
         
         root_folder_id = items[0]['id']
         
@@ -233,6 +233,9 @@ def sync_data_api(creds=None):
         
         final_files_list = list(unique_files.values())
         print(f"Found {len(final_files_list)} unique API files to sync.")
+        
+        if not final_files_list:
+             return False, "Found folder but no CSV files inside."
 
         def download_item(f):
              download_file(service, f['id'], f['name'], file_meta=f) # dest defaults to LOCAL_DATA_DIR
@@ -242,14 +245,17 @@ def sync_data_api(creds=None):
             results = executor.map(download_item, final_files_list)
             for _ in results: pass
         
-        sync_icons_api(service)
+        try:
+             sync_icons_api(service)
+        except Exception as e:
+             print(f"Icon sync minor error: {e}")
         
         print("API Sync Completed Successfully.")
-        return True
+        return True, "Sync completed successfully."
 
     except Exception as e:
         print(f"API Sync Failed: {e}")
-        return False
+        return False, f"API Error: {str(e)}"
 
 def download_file(service, file_id, file_name, dest_folder=LOCAL_DATA_DIR, file_meta=None):
     """Downloads a file from Drive."""
