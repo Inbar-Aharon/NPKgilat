@@ -1057,5 +1057,11 @@ def main():
     with st.expander("Show Raw Data Table / הצג נתונים גולמיים"):
         st.dataframe(filtered_df, use_container_width=True)
 
+import traceback
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        st.error("🚨 Fatal Error during execution:")
+        st.code(traceback.format_exc())
