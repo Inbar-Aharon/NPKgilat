@@ -209,9 +209,14 @@ def sync_data_api(creds=None):
             files = results.get('files', [])
             
             for f in files:
+                name_lower = f['name'].lower()
                 if f['mimeType'] == 'application/vnd.google-apps.folder':
                     process_folder(f['id'])
-                elif f['name'] == 'users.csv' or (f['name'].endswith('.csv') and 'users' not in f['name']):
+                elif name_lower == 'users.csv' or name_lower == 'users':
+                     # Force name to be users.csv for the download
+                     f['save_as'] = 'users.csv'
+                     files_to_download.append(f)
+                elif f['name'].endswith('.csv') and 'users' not in name_lower:
                      files_to_download.append(f)
 
         process_folder(root_folder_id)
@@ -219,17 +224,20 @@ def sync_data_api(creds=None):
         # Deduplicate
         unique_files = {}
         for f in files_to_download:
-            name = f['name']
-            if name not in unique_files:
-                unique_files[name] = f
+            # key by target filename!
+            target_name = f.get('save_as', f['name'])
+            if target_name not in unique_files:
+                unique_files[target_name] = f
             else:
-                current_time = unique_files[name].get('modifiedTime')
+                # Decide based on mod time... logic needs original timestamps
+                current = unique_files[target_name]
+                current_time = current.get('modifiedTime')
                 new_time = f.get('modifiedTime')
                 if current_time and new_time:
                      dt_current = dateutil.parser.isoparse(current_time)
                      dt_new = dateutil.parser.isoparse(new_time)
                      if dt_new > dt_current:
-                         unique_files[name] = f
+                         unique_files[target_name] = f
         
         final_files_list = list(unique_files.values())
         print(f"Found {len(final_files_list)} unique API files to sync.")
@@ -238,7 +246,9 @@ def sync_data_api(creds=None):
              return False, "Found folder but no CSV files inside."
 
         def download_item(f):
-             download_file(service, f['id'], f['name'], file_meta=f) # dest defaults to LOCAL_DATA_DIR
+             # Use 'save_as' if present, else original name
+             target_name = f.get('save_as', f['name'])
+             download_file(service, f['id'], target_name, file_meta=f) # dest defaults to LOCAL_DATA_DIR
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             # Must iterate to catch exceptions!
@@ -251,7 +261,7 @@ def sync_data_api(creds=None):
              print(f"Icon sync minor error: {e}")
         
         # Check if users.csv was found
-        downloaded_names = [f['name'] for f in final_files_list]
+        downloaded_names = [f.get('save_as', f['name']) for f in final_files_list]
         if 'users.csv' not in downloaded_names:
             return True, f"Sync complete, BUT 'users.csv' was missing! Found: {downloaded_names}"
             

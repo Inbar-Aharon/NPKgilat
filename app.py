@@ -499,8 +499,6 @@ def main():
     #         pass
 
     # --- MANUAL SYNC TRIGGER (For Cloud Deployment) ---
-    # Check if data folder is empty or missing CSVs
-    # --- MANUAL SYNC TRIGGER (For Cloud Deployment) ---
     # Check if data folder is valid (must have users.csv)
     users_csv_path = os.path.join(os.path.dirname(__file__), 'data', 'users.csv')
     
