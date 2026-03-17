@@ -3,6 +3,9 @@
 __pycache__/
 *.pyc
 
+# Virtual environment
+.venv/
+
 # Streamlit
 .streamlit/secrets.toml
 
@@ -17,3 +20,8 @@ data/
 
 # OS
 .DS_Store
+
+# Temp / large originals
+assets/*\ *.png
+assets/*\ *.jpg
+assets/unnamed.jpg

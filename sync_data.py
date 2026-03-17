@@ -163,10 +163,12 @@ def sync_icons_api(service):
         def download_icon_wrapper(f):
              download_file(service, f['id'], f['name'], dest_folder=LOCAL_ASSETS_DIR, file_meta=f)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            # Must iterate to catch exceptions!
-            results = executor.map(download_icon_wrapper, final_icons)
-            for _ in results: pass
+        # Sequential download for stability
+        for f in final_icons:
+            try:
+                download_icon_wrapper(f)
+            except Exception as e:
+                print(f"Failed to download icon {f['name']}: {e}")
 
     except Exception as e:
         print(f"Icon API Sync Failed: {e}")
