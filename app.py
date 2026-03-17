@@ -750,7 +750,11 @@ def main():
         # 1. LOGO (Top Priority)
         logo_path = os.path.join(ASSETS_DIR, "logo.png")
         if os.path.exists(logo_path):
-            st.image(logo_path, width='stretch')
+            try:
+                st.image(logo_path, use_container_width=True)
+            except TypeError:
+                # Backward compatibility for older Streamlit versions.
+                st.image(logo_path, use_column_width=True)
             st.write("")
         else:
             st.markdown("## NPK GILAT", unsafe_allow_html=True)
@@ -1822,15 +1826,5 @@ def main():
         else:
             st.info("No data to display")
 
-import traceback
-
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        # Re-raise Streamlit's internal control-flow exceptions so st.rerun()
-        # and st.stop() continue to work correctly.
-        if type(e).__name__ in ('RerunException', 'StopException'):
-            raise
-        st.error("🚨 Fatal Error during execution:")
-        st.code(traceback.format_exc())
+    main()
