@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit as st
 
 # --- CONFIGURATION (Must be first) ---
 st.set_page_config(page_title="Grower Nutrition Monitor", layout="wide", page_icon="🌿")
@@ -35,6 +34,7 @@ if not os.path.exists(ASSETS_DIR):
     os.makedirs(ASSETS_DIR)
 
 DRIVE_FOLDER_NAME = "data app NPK"
+IS_STREAMLIT_CLOUD = os.path.exists("/mount/src") or os.environ.get("HOME") == "/home/adminuser"
 
 # --- TRANSLATIONS (Ported from R) ---
 TRANSLATIONS = {
@@ -234,6 +234,8 @@ def load_data():
 
 def prepare_crop_icon(icon_path, target_size=160):
     """Trim transparent padding and center the icon in a fixed square for crisp display."""
+    if IS_STREAMLIT_CLOUD:
+        return icon_path
     try:
         with Image.open(icon_path) as img:
             img = img.convert("RGBA")
@@ -256,6 +258,8 @@ def prepare_crop_icon(icon_path, target_size=160):
 
 def image_file_to_data_uri(file_path, max_size=260):
     """Return a base64 data URI for the image, resized to max_size×max_size to keep the URI short."""
+    if IS_STREAMLIT_CLOUD:
+        return None
     try:
         img = Image.open(file_path).convert("RGBA")
         img.thumbnail((max_size, max_size), Image.LANCZOS)
@@ -341,7 +345,7 @@ def render_crop_selection(crops, t):
                         break
 
             with crop_cols[i % ncols]:
-                if os.path.exists(icon_path):
+                if os.path.exists(icon_path) and not IS_STREAMLIT_CLOUD:
                     st.image(icon_path, use_container_width=True)
                 else:
                     st.markdown("<div style='font-size:3rem;text-align:center'>🌿</div>", unsafe_allow_html=True)
@@ -360,7 +364,7 @@ OPTIMAL_RANGES = {
 # --- LOGO RENDERER ---
 def render_logo():
     logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../www/logo.png')
-    if os.path.exists(logo_path):
+    if os.path.exists(logo_path) and not IS_STREAMLIT_CLOUD:
         st.sidebar.image(logo_path, use_container_width=True)
 
 # --- MAIN UI ---
@@ -749,7 +753,7 @@ def main():
     with st.sidebar:
         # 1. LOGO (Top Priority)
         logo_path = os.path.join(ASSETS_DIR, "logo.png")
-        if os.path.exists(logo_path):
+        if os.path.exists(logo_path) and not IS_STREAMLIT_CLOUD:
             try:
                 st.image(logo_path, use_container_width=True)
             except TypeError:
