@@ -830,8 +830,13 @@ def main():
         if not st.session_state['auto_data_sync_attempted']:
             st.session_state['auto_data_sync_attempted'] = True
             with st.spinner("No local data found. Syncing from Google Drive..."):
-                success = sync_data.sync_data(creds)
-            if success:
+                try:
+                    result = sync_data.sync_data(creds)
+                    # sync_data_api returns a (bool, message) tuple
+                    sync_ok = result[0] if isinstance(result, tuple) else bool(result)
+                except Exception:
+                    sync_ok = False
+            if sync_ok:
                 st.cache_data.clear()
                 st.rerun()
 
@@ -840,8 +845,13 @@ def main():
 
         if st.button("Download Data from Drive & Start App", use_container_width=True, key='bootstrap_download_start'):
             with st.spinner("Syncing data & icons from Drive..."):
-                success = sync_data.sync_data(creds)
-                if success:
+                try:
+                    result = sync_data.sync_data(creds)
+                    sync_ok = result[0] if isinstance(result, tuple) else bool(result)
+                except Exception as sync_err:
+                    sync_ok = False
+                    st.error(f"Sync error: {sync_err}")
+                if sync_ok:
                     st.success("Sync Complete!")
                     st.cache_data.clear()
                     st.rerun()
@@ -1818,5 +1828,9 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
+        # Re-raise Streamlit's internal control-flow exceptions so st.rerun()
+        # and st.stop() continue to work correctly.
+        if type(e).__name__ in ('RerunException', 'StopException'):
+            raise
         st.error("🚨 Fatal Error during execution:")
         st.code(traceback.format_exc())
