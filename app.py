@@ -187,7 +187,7 @@ CROP_NAMES = {
 def load_data():
     DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
     
-    # 1. טעינת משתמשים מה-Secrets
+    # 1. טעינת משתמשים מה-Secrets, ואם חסר - מקובץ users.csv
     users_df = pd.DataFrame()
     if "users" in st.secrets:
         users_dict = st.secrets["users"]
@@ -196,7 +196,24 @@ def load_data():
             for k, v in users_dict.items()
         ])
     else:
-        st.error("🚨 לא נמצאו משתמשים ב-secrets.toml!")
+        users_csv_path = os.path.join(DATA_DIR, 'users.csv')
+        if os.path.exists(users_csv_path):
+            try:
+                users_df = pd.read_csv(users_csv_path)
+                users_df.columns = users_df.columns.str.strip().str.lower()
+                if 'user' in users_df.columns and 'username' not in users_df.columns:
+                    users_df = users_df.rename(columns={'user': 'username'})
+                required = {'username', 'password'}
+                if not required.issubset(set(users_df.columns)):
+                    st.error("users.csv חייב לכלול עמודות username ו-password.")
+                    users_df = pd.DataFrame()
+                else:
+                    users_df = users_df[['username', 'password']].copy()
+            except Exception as e:
+                st.error(f"שגיאה בטעינת users.csv: {e}")
+                users_df = pd.DataFrame()
+        else:
+            st.error("🚨 לא נמצאו משתמשים ב-secrets.toml או users.csv!")
 
     # 2. טעינת נתוני הגידולים מה-CSV
     if not os.path.exists(DATA_DIR):
