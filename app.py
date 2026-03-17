@@ -187,33 +187,52 @@ CROP_NAMES = {
 def load_data():
     DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
     
-    # 1. טעינת משתמשים מה-Secrets, ואם חסר - מקובץ users.csv
+    # 1. טעינת משתמשים מה-Secrets בלבד
     users_df = pd.DataFrame()
     if "users" in st.secrets:
-        users_dict = st.secrets["users"]
-        users_df = pd.DataFrame([
-            {"username": str(k), "password": str(v)} 
-            for k, v in users_dict.items()
-        ])
-    else:
-        users_csv_path = os.path.join(DATA_DIR, 'users.csv')
-        if os.path.exists(users_csv_path):
-            try:
-                users_df = pd.read_csv(users_csv_path)
-                users_df.columns = users_df.columns.str.strip().str.lower()
-                if 'user' in users_df.columns and 'username' not in users_df.columns:
-                    users_df = users_df.rename(columns={'user': 'username'})
-                required = {'username', 'password'}
-                if not required.issubset(set(users_df.columns)):
-                    st.error("users.csv חייב לכלול עמודות username ו-password.")
-                    users_df = pd.DataFrame()
+        try:
+            users_raw = st.secrets["users"]
+            if hasattr(users_raw, "to_dict"):
+                users_raw = users_raw.to_dict()
+
+            parsed_users = []
+            if isinstance(users_raw, dict):
+                # Format A: {"demo": "1234", ...}
+                if all(not isinstance(v, (dict, list, tuple)) for v in users_raw.values()):
+                    parsed_users = [{"username": str(k), "password": str(v)} for k, v in users_raw.items()]
+                # Format B: {"username": "demo", "password": "1234"}
+                elif "username" in users_raw and "password" in users_raw:
+                    parsed_users = [{"username": str(users_raw.get("username")), "password": str(users_raw.get("password"))}]
+                # Format C: {"demo": {"password": "1234"}, ...}
                 else:
-                    users_df = users_df[['username', 'password']].copy()
-            except Exception as e:
-                st.error(f"שגיאה בטעינת users.csv: {e}")
-                users_df = pd.DataFrame()
-        else:
-            st.error("🚨 לא נמצאו משתמשים ב-secrets.toml או users.csv!")
+                    for key, value in users_raw.items():
+                        if hasattr(value, "to_dict"):
+                            value = value.to_dict()
+                        if isinstance(value, dict) and "password" in value:
+                            uname = value.get("username", key)
+                            parsed_users.append({"username": str(uname), "password": str(value.get("password"))})
+            elif isinstance(users_raw, (list, tuple)):
+                # Format D: [{"username": "demo", "password": "1234"}, ...]
+                for item in users_raw:
+                    if hasattr(item, "to_dict"):
+                        item = item.to_dict()
+                    if isinstance(item, dict):
+                        uname = item.get("username", item.get("user"))
+                        pwd = item.get("password")
+                        if uname is not None and pwd is not None:
+                            parsed_users.append({"username": str(uname), "password": str(pwd)})
+
+            users_df = pd.DataFrame(parsed_users)
+            if not users_df.empty:
+                users_df["username"] = users_df["username"].astype(str).str.strip()
+                users_df["password"] = users_df["password"].astype(str).str.strip()
+            else:
+                st.error("🚨 users ב-secrets.toml בפורמט לא נתמך.")
+        except Exception as e:
+            st.error(f"🚨 שגיאה בטעינת users מ-secrets.toml: {e}")
+            users_df = pd.DataFrame()
+    else:
+        st.error("🚨 לא נמצאו משתמשים ב-secrets.toml!")
 
     # 2. טעינת נתוני הגידולים מה-CSV
     if not os.path.exists(DATA_DIR):
@@ -821,18 +840,6 @@ def main():
                     # Load users to verify
                     with st.spinner("Authenticating..."):
                        users_db, _ = load_data()
-
-                    if users_db is None or users_db.empty:
-                        with st.spinner("User database not found locally. Syncing from Drive..."):
-                            try:
-                                result = sync_data.sync_data(creds)
-                                sync_ok = result[0] if isinstance(result, tuple) else bool(result)
-                            except Exception:
-                                sync_ok = False
-
-                        if sync_ok:
-                            st.cache_data.clear()
-                            users_db, _ = load_data()
                     
                     if users_db is not None and not users_db.empty:
                         users_db['username'] = users_db['username'].astype(str).str.strip()
@@ -849,7 +856,7 @@ def main():
                         else:
                             st.error("Invalid Username or Password")
                     else:
-                        st.error("Could not load user database. Please verify Drive sync and users.csv.")
+                        st.error("Could not load user database from secrets.toml.")
         st.stop()
 
 
