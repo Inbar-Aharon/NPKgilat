@@ -822,9 +822,32 @@ def main():
     with st.spinner("Loading Data..."):
         _, main_data = load_data()
 
+    if 'auto_data_sync_attempted' not in st.session_state:
+        st.session_state['auto_data_sync_attempted'] = False
+
     if main_data is None or main_data.empty:
-         st.warning("No data found.")
-         st.stop()
+        # Cloud instances start without local files; try an automatic one-time sync.
+        if not st.session_state['auto_data_sync_attempted']:
+            st.session_state['auto_data_sync_attempted'] = True
+            with st.spinner("No local data found. Syncing from Google Drive..."):
+                success = sync_data.sync_data(creds)
+            if success:
+                st.cache_data.clear()
+                st.rerun()
+
+        st.warning("Data not found locally.")
+        st.info("Since this is a cloud deployment, the app needs to fetch data from Google Drive.")
+
+        if st.button("Download Data from Drive & Start App", use_container_width=True, key='bootstrap_download_start'):
+            with st.spinner("Syncing data & icons from Drive..."):
+                success = sync_data.sync_data(creds)
+                if success:
+                    st.success("Sync Complete!")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.error("Sync Failed. Please verify Streamlit secrets for Google auth.")
+        st.stop()
          
     # Filter by User
     user_data = main_data[main_data['username'] == st.session_state['user']]
