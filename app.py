@@ -35,6 +35,7 @@ if not os.path.exists(ASSETS_DIR):
 
 DRIVE_FOLDER_NAME = "data app NPK"
 IS_STREAMLIT_CLOUD = os.path.exists("/mount/src") or os.environ.get("HOME") == "/home/adminuser"
+REPO_ASSET_BASE_URL = "https://raw.githubusercontent.com/Inbar-Aharon/NPKgilat/main/assets"
 
 # --- TRANSLATIONS (Ported from R) ---
 TRANSLATIONS = {
@@ -307,6 +308,11 @@ def image_file_to_data_uri(file_path, max_size=260):
         return None
 
 
+def cloud_asset_url(file_name):
+    """Public GitHub raw URL so Streamlit Cloud renders images in the browser."""
+    return f"{REPO_ASSET_BASE_URL}/{quote(str(file_name))}"
+
+
 def render_crop_selection(crops, t):
     lang = st.session_state.get('lang', 'en')
     selected_crop = str(st.session_state.get('selected_crop', '')).strip().lower()
@@ -381,7 +387,13 @@ def render_crop_selection(crops, t):
                         break
 
             with crop_cols[i % ncols]:
-                if os.path.exists(icon_path) and not IS_STREAMLIT_CLOUD:
+                if IS_STREAMLIT_CLOUD:
+                    icon_url = cloud_asset_url(os.path.basename(icon_path))
+                    st.markdown(
+                        f"<img src='{icon_url}' style='width:100%;height:auto;border-radius:10px;' alt='' />",
+                        unsafe_allow_html=True,
+                    )
+                elif os.path.exists(icon_path):
                     st.image(icon_path, use_container_width=True)
                 else:
                     st.markdown("<div style='font-size:3rem;text-align:center'>🌿</div>", unsafe_allow_html=True)
@@ -789,11 +801,16 @@ def main():
     with st.sidebar:
         # 1. LOGO (Top Priority)
         logo_path = os.path.join(ASSETS_DIR, "logo.png")
-        if os.path.exists(logo_path) and not IS_STREAMLIT_CLOUD:
+        if IS_STREAMLIT_CLOUD:
+            st.markdown(
+                f"<img src='{cloud_asset_url('logo.png')}' style='width:100%;height:auto;margin-bottom:8px;' alt='NPK GILAT' />",
+                unsafe_allow_html=True,
+            )
+            st.write("")
+        elif os.path.exists(logo_path):
             try:
                 st.image(logo_path, use_container_width=True)
             except TypeError:
-                # Backward compatibility for older Streamlit versions.
                 st.image(logo_path, use_column_width=True)
             st.write("")
         else:
@@ -1017,7 +1034,9 @@ def main():
         'K': 'Potassium' if st.session_state['lang'] == 'en' else 'אשלגן'
     }
 
-    icon_uri = image_file_to_data_uri(crop_icon_path, max_size=320) if os.path.exists(crop_icon_path) else None
+    icon_uri = None
+    if os.path.exists(crop_icon_path):
+        icon_uri = cloud_asset_url(os.path.basename(crop_icon_path)) if IS_STREAMLIT_CLOUD else image_file_to_data_uri(crop_icon_path, max_size=320)
     crop_icon_markup = f"<img src='{icon_uri}' alt='' class='dashboard-crop-hero-icon' />" if icon_uri else "<div class='dashboard-crop-hero-fallback'>🌿</div>"
 
     dashboard_css = """
