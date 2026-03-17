@@ -821,6 +821,18 @@ def main():
                     # Load users to verify
                     with st.spinner("Authenticating..."):
                        users_db, _ = load_data()
+
+                    if users_db is None or users_db.empty:
+                        with st.spinner("User database not found locally. Syncing from Drive..."):
+                            try:
+                                result = sync_data.sync_data(creds)
+                                sync_ok = result[0] if isinstance(result, tuple) else bool(result)
+                            except Exception:
+                                sync_ok = False
+
+                        if sync_ok:
+                            st.cache_data.clear()
+                            users_db, _ = load_data()
                     
                     if users_db is not None and not users_db.empty:
                         users_db['username'] = users_db['username'].astype(str).str.strip()
@@ -837,7 +849,7 @@ def main():
                         else:
                             st.error("Invalid Username or Password")
                     else:
-                        st.error("Could not load user database.")
+                        st.error("Could not load user database. Please verify Drive sync and users.csv.")
         st.stop()
 
 
