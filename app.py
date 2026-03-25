@@ -92,6 +92,7 @@ TRANSLATIONS = {
         "history_reset": "Clear Selection",
         "history_focus": "History for selected site",
         "history_scope": "Showing linked records for the same sample across all dates.",
+        "sample_selection_help": "Select any sample point to display all records for that sample across all dates.",
         "history_none": "No linked history was found for the selected record.",
         "trend_overview": "Overview Trend",
         "history_open": "Open History",
@@ -151,6 +152,7 @@ TRANSLATIONS = {
         "history_reset": "נקה בחירה",
         "history_focus": "היסטוריה עבור החלקה שנבחרה",
         "history_scope": "מוצגות רשומות מקושרות של אותה דגימה לאורך כל התאריכים.",
+        "sample_selection_help": "בחרו נקודת דגימה כדי להציג את כל הנתונים של אותה דגימה לאורך כל התאריכים.",
         "history_none": "לא נמצאה היסטוריה מקושרת לרשומה שנבחרה.",
         "trend_overview": "מגמת סקירה",
         "history_open": "פתח היסטוריה",
@@ -326,9 +328,10 @@ def cloud_asset_url(file_name):
 def render_crop_selection(crops, t):
     lang = st.session_state.get('lang', 'en')
     selected_crop = str(st.session_state.get('selected_crop', '')).strip().lower()
+    crop_title_size = "2.45rem" if lang == 'he' else "3rem"
 
     st.markdown(
-        f"<h2 style='text-align:center;color:#1F2937;margin-bottom:0.2rem;font-size:3rem;'>{t['select_crop_title']}</h2>",
+        f"<h2 style='text-align:center;color:#1F2937;margin-bottom:0.2rem;font-size:{crop_title_size};'>{t['select_crop_title']}</h2>",
         unsafe_allow_html=True,
     )
     crop_subtitle = "בחרו גידול כדי להיכנס ללוח הנתונים" if lang == 'he' else "Tap a crop to enter its dashboard"
@@ -900,9 +903,15 @@ def main():
         if not st.session_state['auto_data_sync_attempted']:
             st.session_state['auto_data_sync_attempted'] = True
             with st.spinner("Syncing data from Google Drive..."):
+                import concurrent.futures
+                sync_ok = False
                 try:
-                    result = sync_data.sync_data(creds)
-                    sync_ok = result[0] if isinstance(result, tuple) else bool(result)
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(sync_data.sync_data, creds)
+                        result = future.result(timeout=30)
+                        sync_ok = result[0] if isinstance(result, tuple) else bool(result)
+                except concurrent.futures.TimeoutError:
+                    sync_ok = False
                 except Exception:
                     sync_ok = False
 
@@ -1114,6 +1123,10 @@ def main():
         font-weight: 800;
         color: #0F172A;
         margin: 0;
+    }
+    .dashboard-title-he {
+        font-size: clamp(1.9rem, 3.1vw, 2.85rem);
+        line-height: 1.05;
     }
     .dashboard-subtitle {
         color: #64748B;
@@ -1445,7 +1458,7 @@ def main():
                 <div class='dashboard-crop-hero-media'>{crop_icon_markup}</div>
                 <div>
                     <div class='dashboard-eyebrow'>{ui_text['dashboard']}</div>
-                    <h1 class='dashboard-title'>{display_title}</h1>
+                    <h1 class='dashboard-title{' dashboard-title-he' if st.session_state['lang'] == 'he' else ''}'>{display_title}</h1>
                     <div class='dashboard-subtitle'>{t['welcome']} {st.session_state['user']}</div>
                     <div class='dashboard-chip-row'>
                         <span class='dashboard-chip'><span class='dashboard-chip-dot'></span>{ui_text['current_snapshot']}</span>
@@ -1819,6 +1832,7 @@ def main():
                         """,
                         unsafe_allow_html=True,
                     )
+                st.caption(t['sample_selection_help'])
             with sel_action_col:
                 if selected_record is not None:
                     st.markdown("<div class='dashboard-inline-actions'>", unsafe_allow_html=True)

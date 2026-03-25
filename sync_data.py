@@ -226,29 +226,56 @@ def sync_data_api(creds=None):
             return False, f"Folder '{DRIVE_FOLDER_NAME}' not found in Drive. Please verify the folder name."
         
         root_folder_id = items[0]['id']
-        
-        # 2. Collect files to download
-        files_to_download = []
 
-        def process_folder(folder_id):
-            results = service.files().list(
-                q=f"'{folder_id}' in parents and trashed = false",
-                fields="files(id, name, mimeType, modifiedTime)"
+        def find_folder_id(parent_id, folder_name):
+            resp = service.files().list(
+                q=(
+                    f"'{parent_id}' in parents and "
+                    f"name = '{folder_name}' and "
+                    "mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+                ),
+                fields="files(id, name)",
             ).execute()
-            files = results.get('files', [])
-            
-            for f in files:
+            found = resp.get('files', [])
+            return found[0]['id'] if found else None
+
+        # 2. Restrict search strictly to the app data folder:
+        # DRIVE_FOLDER_NAME/GrowerNutritionMonitor/streamlit_app/data
+        gnm_id = find_folder_id(root_folder_id, 'GrowerNutritionMonitor')
+        if not gnm_id:
+            return False, "Folder 'GrowerNutritionMonitor' not found under Drive root."
+
+        streamlit_app_id = find_folder_id(gnm_id, 'streamlit_app')
+        if not streamlit_app_id:
+            return False, "Folder 'streamlit_app' not found under GrowerNutritionMonitor."
+
+        data_folder_id = find_folder_id(streamlit_app_id, 'data')
+        if not data_folder_id:
+            return False, "Folder 'data' not found under streamlit_app."
+
+        # 3. Collect only files inside streamlit_app/data.
+        files_to_download = []
+        page_token = None
+        while True:
+            kwargs = {
+                'q': f"'{data_folder_id}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false",
+                'fields': "nextPageToken, files(id, name, mimeType, modifiedTime)",
+            }
+            if page_token:
+                kwargs['pageToken'] = page_token
+
+            resp = service.files().list(**kwargs).execute()
+            for f in resp.get('files', []):
                 name_lower = f['name'].lower()
-                if f['mimeType'] == 'application/vnd.google-apps.folder':
-                    process_folder(f['id'])
-                elif name_lower == 'users.csv' or name_lower == 'users':
-                    # Force name to be users.csv for the download
+                if name_lower == 'users.csv' or name_lower == 'users':
                     f['save_as'] = 'users.csv'
                     files_to_download.append(f)
                 elif is_required_data_csv(f['name']):
                     files_to_download.append(f)
 
-        process_folder(root_folder_id)
+            page_token = resp.get('nextPageToken')
+            if not page_token:
+                break
         
         # Deduplicate
         unique_files = {}
