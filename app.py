@@ -893,24 +893,39 @@ def main():
     with st.spinner("Loading Data..."):
         _, main_data = load_data()
 
-    if main_data is None or main_data.empty:
-        st.warning("Data not found locally.")
-        st.info("Click below to fetch data from Google Drive. Auto-sync on first page load is disabled for faster startup.")
+    if 'auto_data_sync_attempted' not in st.session_state:
+        st.session_state['auto_data_sync_attempted'] = False
 
-        if st.button("Download Data from Drive & Start App", use_container_width=True, key='bootstrap_download_start'):
-            with st.spinner("Syncing data & icons from Drive..."):
+    if main_data is None or main_data.empty:
+        if not st.session_state['auto_data_sync_attempted']:
+            st.session_state['auto_data_sync_attempted'] = True
+            with st.spinner("Syncing data from Google Drive..."):
+                try:
+                    result = sync_data.sync_data(creds)
+                    sync_ok = result[0] if isinstance(result, tuple) else bool(result)
+                except Exception:
+                    sync_ok = False
+
+            if sync_ok:
+                st.cache_data.clear()
+                st.rerun()
+
+        # Fallback UI only if auto-sync failed.
+        st.warning("Could not load data automatically.")
+        if st.button("Retry Data Sync", use_container_width=True, key='bootstrap_download_start'):
+            with st.spinner("Retrying sync..."):
                 try:
                     result = sync_data.sync_data(creds)
                     sync_ok = result[0] if isinstance(result, tuple) else bool(result)
                 except Exception as sync_err:
                     sync_ok = False
                     st.error(f"Sync error: {sync_err}")
+
                 if sync_ok:
-                    st.success("Sync Complete!")
                     st.cache_data.clear()
                     st.rerun()
                 else:
-                    st.error("Sync Failed. Please verify Streamlit secrets for Google auth.")
+                    st.error("Sync failed. Please verify Google auth secrets.")
         st.stop()
          
     # Filter by User
