@@ -1,19 +1,17 @@
 import os
 import io
 import shutil
-import pandas as pd
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import auth_utils
-import setup_auth
-import concurrent.futures
 import dateutil.parser
-import datetime
 
 # Configuration
 DRIVE_FOLDER_NAME = "data app NPK"
 LOCAL_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 LOCAL_ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
+REQUIRED_DATA_PREFIXES = ("results_",)
+REQUIRED_DATA_FILES = {"users.csv", "users"}
 
 # User provided local path for Drive
 USER_DRIVE_PATH = "/Users/inbaraharon/Library/CloudStorage/GoogleDrive-npkgilat@gmail.com/My Drive/WORKFLOWS/or/Inbar/data app NPK"
@@ -23,6 +21,32 @@ def ensure_dirs():
         os.makedirs(LOCAL_DATA_DIR)
     if not os.path.exists(LOCAL_ASSETS_DIR):
         os.makedirs(LOCAL_ASSETS_DIR)
+
+
+def is_required_data_csv(file_name):
+    """Allow only the CSV files used by the dashboard."""
+    name_lower = str(file_name).strip().lower()
+    if name_lower in REQUIRED_DATA_FILES:
+        return True
+    return name_lower.endswith('.csv') and name_lower.startswith(REQUIRED_DATA_PREFIXES)
+
+
+def should_download_remote(file_meta, dest_path):
+    """Skip downloading when a local file is already up-to-date."""
+    if not os.path.exists(dest_path):
+        return True
+
+    remote_modified = (file_meta or {}).get('modifiedTime')
+    if not remote_modified:
+        return False
+
+    try:
+        remote_ts = dateutil.parser.isoparse(remote_modified).timestamp()
+        local_ts = os.path.getmtime(dest_path)
+        return remote_ts > (local_ts + 1)
+    except Exception:
+        # If metadata cannot be parsed, prefer downloading to keep data fresh.
+        return True
 
 def sync_from_local_drive():
     """Syncs data and icons directly from the local Google Drive folder."""
@@ -34,16 +58,11 @@ def sync_from_local_drive():
     print("Found local Drive folder! Syncing via file copy...")
     ensure_dirs()
     
-    # 1. Sync Data (CSVs)
-    # Recursively find CSVs in the local Drive folder
-    # We want CSVs from 'GrowerNutritionMonitor' folder mainly? Or root?
-    # Previous logic searched recursively from root.
-    
-    # Let's walk the USER_DRIVE_PATH
+    # 1. Sync only required data files (users.csv + results_*.csv).
     data_count = 0
     for root, dirs, files in os.walk(USER_DRIVE_PATH):
         for file in files:
-            if file.endswith('.csv') and not file.startswith('.'):
+            if is_required_data_csv(file) and not file.startswith('.'):
                 src_path = os.path.join(root, file)
                 dest_path = os.path.join(LOCAL_DATA_DIR, file)
                 
@@ -86,15 +105,14 @@ def sync_from_local_drive():
 
 def should_copy(src, dest):
     """Returns True if src is newer or dest is missing."""
-    # For local sync, we want to enforce the source as truth, especially if dimensions/content changed but mtime is older on source (e.g. restored file).
-    # Also to fix the issue where a previous download created a 'newer' file than the source.
-    # To be safe and ensure 'Reload' actually reloads:
-    return True
-    
-    # Original logic was:
-    # if not os.path.exists(dest):
-    #    return True
-    # return os.path.getmtime(src) > os.path.getmtime(dest)
+    if not os.path.exists(dest):
+        return True
+    try:
+        if os.path.getsize(src) != os.path.getsize(dest):
+            return True
+        return os.path.getmtime(src) > (os.path.getmtime(dest) + 1)
+    except OSError:
+        return True
 
 # Wrapper functions for compatibility with app.py calls
 # Wrapper functions for compatibility with app.py calls
@@ -164,11 +182,20 @@ def sync_icons_api(service):
              download_file(service, f['id'], f['name'], dest_folder=LOCAL_ASSETS_DIR, file_meta=f)
 
         # Sequential download for stability
+        downloaded_count = 0
+        skipped_count = 0
         for f in final_icons:
             try:
+                target_path = os.path.join(LOCAL_ASSETS_DIR, f['name'])
+                if not should_download_remote(f, target_path):
+                    skipped_count += 1
+                    continue
                 download_icon_wrapper(f)
+                downloaded_count += 1
             except Exception as e:
                 print(f"Failed to download icon {f['name']}: {e}")
+
+        print(f"Icon sync complete. Downloaded: {downloaded_count}, skipped unchanged: {skipped_count}")
 
     except Exception as e:
         print(f"Icon API Sync Failed: {e}")
@@ -215,11 +242,11 @@ def sync_data_api(creds=None):
                 if f['mimeType'] == 'application/vnd.google-apps.folder':
                     process_folder(f['id'])
                 elif name_lower == 'users.csv' or name_lower == 'users':
-                     # Force name to be users.csv for the download
-                     f['save_as'] = 'users.csv'
-                     files_to_download.append(f)
-                elif f['name'].endswith('.csv') and 'users' not in name_lower:
-                     files_to_download.append(f)
+                    # Force name to be users.csv for the download
+                    f['save_as'] = 'users.csv'
+                    files_to_download.append(f)
+                elif is_required_data_csv(f['name']):
+                    files_to_download.append(f)
 
         process_folder(root_folder_id)
         
@@ -249,10 +276,17 @@ def sync_data_api(creds=None):
 
         # Sequential download to avoid SSL errors
         failures = []
+        downloaded = 0
+        skipped = 0
         for f in final_files_list:
              target_name = f.get('save_as', f['name'])
              try:
+                 dest_path = os.path.join(LOCAL_DATA_DIR, target_name)
+                 if not should_download_remote(f, dest_path):
+                     skipped += 1
+                     continue
                  download_file(service, f['id'], target_name, file_meta=f)
+                 downloaded += 1
              except Exception as e:
                  print(f"Failed to download {target_name}: {e}")
                  failures.append(f"{target_name} ({e})")
@@ -266,13 +300,13 @@ def sync_data_api(creds=None):
         downloaded_names = [f.get('save_as', f['name']) for f in final_files_list]
         
         if failures:
-             return True, f"Sync partial. Failed: {failures}. Users found: {'users.csv' in downloaded_names}"
+             return True, f"Sync partial. Failed: {failures}. Downloaded: {downloaded}, skipped: {skipped}. Users found: {'users.csv' in downloaded_names}"
 
         if 'users.csv' not in downloaded_names:
-            return True, f"Sync complete, BUT 'users.csv' was missing! Found: {downloaded_names}"
+            return True, f"Sync complete, BUT 'users.csv' was missing! Downloaded: {downloaded}, skipped: {skipped}. Found: {downloaded_names}"
             
         print("API Sync Completed Successfully.")
-        return True, "Sync completed successfully."
+        return True, f"Sync completed successfully. Downloaded: {downloaded}, skipped unchanged: {skipped}."
 
     except Exception as e:
         print(f"API Sync Failed: {e}")

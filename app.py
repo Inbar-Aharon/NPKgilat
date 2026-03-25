@@ -239,7 +239,17 @@ def load_data():
     if not os.path.exists(DATA_DIR):
         return users_df, pd.DataFrame()
 
-    all_files = glob.glob(os.path.join(DATA_DIR, "*.csv"))
+    all_csv_files = glob.glob(os.path.join(DATA_DIR, "*.csv"))
+    # Prefer only dashboard datasets to avoid parsing unrelated test CSV files.
+    all_files = [
+        f for f in all_csv_files
+        if os.path.basename(f).lower().startswith("results_")
+    ]
+    if not all_files:
+        all_files = [
+            f for f in all_csv_files
+            if os.path.basename(f).lower() not in ("users.csv", "users")
+        ]
     data_frames = []
     
     for f in all_files:
@@ -883,26 +893,9 @@ def main():
     with st.spinner("Loading Data..."):
         _, main_data = load_data()
 
-    if 'auto_data_sync_attempted' not in st.session_state:
-        st.session_state['auto_data_sync_attempted'] = False
-
     if main_data is None or main_data.empty:
-        # Cloud instances start without local files; try an automatic one-time sync.
-        if not st.session_state['auto_data_sync_attempted']:
-            st.session_state['auto_data_sync_attempted'] = True
-            with st.spinner("No local data found. Syncing from Google Drive..."):
-                try:
-                    result = sync_data.sync_data(creds)
-                    # sync_data_api returns a (bool, message) tuple
-                    sync_ok = result[0] if isinstance(result, tuple) else bool(result)
-                except Exception:
-                    sync_ok = False
-            if sync_ok:
-                st.cache_data.clear()
-                st.rerun()
-
         st.warning("Data not found locally.")
-        st.info("Since this is a cloud deployment, the app needs to fetch data from Google Drive.")
+        st.info("Click below to fetch data from Google Drive. Auto-sync on first page load is disabled for faster startup.")
 
         if st.button("Download Data from Drive & Start App", use_container_width=True, key='bootstrap_download_start'):
             with st.spinner("Syncing data & icons from Drive..."):
@@ -1697,7 +1690,7 @@ def main():
                 fig.add_vline(x=selected_record['date'], line_width=2, line_dash='dot', line_color='#0F172A')
 
             fig.update_layout(
-                margin=dict(l=8, r=8, t=8, b=18),
+                margin=dict(l=50, r=8, t=8, b=18),
                 height=350,
                 plot_bgcolor='white',
                 paper_bgcolor='white',
@@ -1753,7 +1746,7 @@ def main():
                     dialog_fig.update_layout(
                         title=nutrient,
                         height=280,
-                        margin=dict(l=10, r=10, t=34, b=30),
+                        margin=dict(l=50, r=10, t=34, b=30),
                         plot_bgcolor='white',
                         paper_bgcolor='white',
                         showlegend=False,
