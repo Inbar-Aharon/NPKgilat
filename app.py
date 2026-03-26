@@ -807,7 +807,12 @@ def main():
     if 'selected_crop' not in st.session_state:
         st.session_state['selected_crop'] = None
 
-    t = TRANSLATIONS[st.session_state['lang']]
+    current_lang = st.session_state.get('lang', 'en')
+    if current_lang not in TRANSLATIONS:
+        current_lang = 'en'
+        st.session_state['lang'] = current_lang
+    # Merge over English defaults so missing keys never crash the app.
+    t = {**TRANSLATIONS['en'], **TRANSLATIONS.get(current_lang, {})}
     
     # --- SIDEBAR (Global) ---
     with st.sidebar:
@@ -832,7 +837,7 @@ def main():
         lang_choice = st.radio("Language / שפה", ["English", "עברית"], index=1 if st.session_state['lang'] =='he' else 0, horizontal=True)
         if (lang_choice == "עברית" and st.session_state['lang'] != 'he') or (lang_choice == "English" and st.session_state['lang'] != 'en'):
             st.session_state['lang'] = 'he' if lang_choice == "עברית" else 'en'
-            t = TRANSLATIONS[st.session_state['lang']] # Update immediately
+            t = {**TRANSLATIONS['en'], **TRANSLATIONS.get(st.session_state['lang'], {})} # Update immediately
             st.rerun()
             
         # 3. Reload/Sync
